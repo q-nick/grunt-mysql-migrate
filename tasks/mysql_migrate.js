@@ -25,10 +25,18 @@ module.exports = function(grunt) {
             pass: options.password,
             database:   options.db
         };
-        if(config.push === true )
-            db_push(config, options.path);
-        else
+
+        if(options.push === true )
+        {
+            //pushing is based on tmp file (ignored in version controll)
+            grunt.file.delete(options.path +'.tmp', {force: true});
+            grunt.file.copy(options.path, options.path +'.tmp');
+            db_replace(options.search, options.replace, options.path+'.tmp');
+            db_push(config, options.path+'.tmp');
+        }
+        else{
             db_dump(config, options.path);
+        }
     });
 
     /*
@@ -83,12 +91,28 @@ module.exports = function(grunt) {
             grunt.log.writeln("over SSH");
             cmd = tpl_ssh + " '" + tpl_mysql + "' < " + path;
         }
-        grunt.log.writeln("Pushing "+config.databse+" to server");
+        grunt.log.writeln("Pushing "+config.database+" to server");
             
         // Execute cmd
         shell.exec(cmd);
 
-        grunt.log.oklns("Database "+config.databse+" pushed succesfully");
+        grunt.log.oklns("Database "+config.database+" pushed succesfully");
+    }
+
+    function db_replace(search,replace,output_file) {
+
+        var cmd = grunt.template.process(tpls.search_replace, {
+            data: {
+                search: search,
+                replace: replace,
+                path: output_file
+            }
+        });
+
+        grunt.log.writeln("Replacing '" + search + "' with '" + replace + "' in the database.");
+         // Execute cmd
+        shell.exec(cmd);
+        grunt.log.oklns("Database references succesfully updated.");
     }
 
     var tpls = {
@@ -97,7 +121,7 @@ module.exports = function(grunt) {
 
         search_replace: "sed -i \"s#\<%= search %>#<%= replace %>#g\" <%= path %>",
 
-        mysqldump: "mysqldump -h <%= host %> -u<%= user %> -p<%= pass %> <%= database %>",
+        mysqldump: "mysqldump --net_buffer_length=5000 -h <%= host %> -u<%= user %> -p<%= pass %> <%= database %> ",
 
         mysql: "mysql -h <%= host %> -u <%= user %> -p<%= pass %> <%= database %>",
 
